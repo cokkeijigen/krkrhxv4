@@ -1,0 +1,300 @@
+﻿{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "x86-vcpkg-base",
+      "hidden": true,
+      "cacheVariables": {
+        "CMAKE_TOOLCHAIN_FILE": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "VCPKG_TARGET_TRIPLET": "x86-windows-static",
+        "VCPKG_INSTALLED_DIR": "${sourceDir}/.build/vcpkg-installed/"
+      }
+    },
+    {
+      "name": "x64-vcpkg-base",
+      "hidden": true,
+      "inherits": "x86-vcpkg-base",
+      "cacheVariables": {
+        "VCPKG_TARGET_TRIPLET": "x64-windows-static"
+      }
+    },
+    {
+      "name": "base-windows-build",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/.build/${presetName}",
+      "installDir": "${sourceDir}/.build/install/${presetName}"
+    },
+    {
+      "name": "base-windows-msvc",
+      "hidden": true,
+      "inherits": "base-windows-build",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl.exe",
+        "CMAKE_CXX_COMPILER": "cl.exe"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-msvc-x86-release",
+      "displayName": "Windows MSVC x86 Release",
+      "description": "Targeting Windows x32 with MSVC (Release)",
+      "inherits": [
+        "base-windows-msvc",
+        "x86-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-msvc-x86-debug",
+      "displayName": "Windows MSVC x86 Debug",
+      "description": "Targeting Windows x32 with MSVC (Debug)",
+      "inherits": [
+        "base-windows-msvc",
+        "x86-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-msvc-x86-relwithdebinfo",
+      "displayName": "Windows MSVC x86 RelWithDebInfo",
+      "description": "Targeting Windows x32 with MSVC (RelWithDebInfo)",
+      "inherits": [
+        "base-windows-msvc",
+        "x86-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "windows-msvc-x64-release",
+      "displayName": "Windows MSVC x64 Release",
+      "description": "Targeting Windows x64 with MSVC (Release)",
+      "inherits": [
+        "base-windows-msvc",
+        "x64-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-msvc-x64-debug",
+      "displayName": "Windows MSVC x64 Debug",
+      "description": "Targeting Windows x64 with MSVC (Debug)",
+      "inherits": [
+        "base-windows-msvc",
+        "x64-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-msvc-x64-relwithdebinfo",
+      "displayName": "Windows MSVC x64 RelWithDebInfo",
+      "description": "Targeting Windows x64 with MSVC (RelWithDebInfo)",
+      "inherits": [
+        "base-windows-msvc",
+        "x64-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "base-windows-clang",
+      "hidden": true,
+      "inherits": "base-windows-build",
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      }
+    },
+    {
+      "name": "windows-clang-x86-release",
+      "displayName": "Windows Clang x86 Release",
+      "description": "Targeting Windows x32 with Clang (Release)",
+      "inherits": [
+        "base-windows-clang",
+        "x86-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-clang-x86-debug",
+      "displayName": "Windows Clang x86 Debug",
+      "description": "Targeting Windows x32 with Clang (Debug)",
+      "inherits": [
+        "base-windows-clang",
+        "x86-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-clang-x86-relwithdebinfo",
+      "displayName": "Windows Clang x86 RelWithDebInfo",
+      "description": "Targeting Windows x32 with Clang (RelWithDebInfo)",
+      "inherits": [
+        "base-windows-clang",
+        "x86-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x86",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    },
+    {
+      "name": "windows-clang-x64-release",
+      "displayName": "Windows Clang x64 Release",
+      "description": "Targeting Windows x64 with Clang (Release)",
+      "inherits": [
+        "base-windows-clang",
+        "x64-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "windows-clang-x64-debug",
+      "displayName": "Windows Clang x64 Debug",
+      "description": "Targeting Windows x64 with Clang (Debug)",
+      "inherits": [
+        "base-windows-clang",
+        "x64-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "windows-clang-x64-relwithdebinfo",
+      "displayName": "Windows Clang x64 RelWithDebInfo",
+      "description": "Targeting Windows x64 with Clang (RelWithDebInfo)",
+      "inherits": [
+        "base-windows-clang",
+        "x64-vcpkg-base"
+      ],
+      "architecture": {
+        "value": "x64",
+        "strategy": "external"
+      },
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "windows-msvc-x86-release",
+      "configurePreset": "windows-msvc-x86-release"
+    },
+    {
+      "name": "windows-msvc-x86-debug",
+      "configurePreset": "windows-msvc-x86-debug"
+    },
+    {
+      "name": "windows-msvc-x86-relwithdebinfo",
+      "configurePreset": "windows-msvc-x86-relwithdebinfo"
+    },
+    {
+      "name": "windows-msvc-x64-release",
+      "configurePreset": "windows-msvc-x64-release"
+    },
+    {
+      "name": "windows-msvc-x64-debug",
+      "configurePreset": "windows-msvc-x64-debug"
+    },
+    {
+      "name": "windows-msvc-x64-relwithdebinfo",
+      "configurePreset": "windows-msvc-x64-relwithdebinfo"
+    },
+    {
+      "name": "windows-clang-x86-release",
+      "configurePreset": "windows-clang-x86-release"
+    },
+    {
+      "name": "windows-clang-x86-debug",
+      "configurePreset": "windows-clang-x86-debug"
+    },
+    {
+      "name": "windows-clang-x86-relwithdebinfo",
+      "configurePreset": "windows-clang-x86-relwithdebinfo"
+    },
+    {
+      "name": "windows-clang-x64-release",
+      "configurePreset": "windows-clang-x64-release"
+    },
+    {
+      "name": "windows-clang-x64-debug",
+      "configurePreset": "windows-clang-x64-debug"
+    },
+    {
+      "name": "windows-clang-x64-relwithdebinfo",
+      "configurePreset": "windows-clang-x64-relwithdebinfo"
+    }
+  ]
+}

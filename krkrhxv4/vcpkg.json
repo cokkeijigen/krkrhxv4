@@ -1,0 +1,14 @@
+{
+  "name": "krpatch",
+  "version": "1.0.0",
+  "dependencies": [
+    "zlib"
+  ],
+  "vcpkg-configuration": {
+    "default-registry": {
+      "kind": "git",
+      "repository": "https://github.com/Microsoft/vcpkg.git",
+      "baseline": "5d57f5a0a5469a23e005fc79a7c1814ab4fc967e"
+    }
+  }
+}
