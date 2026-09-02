@@ -121,9 +121,26 @@ namespace krkr::xp3
     // Repacks `outdir` per the manifest at `manifest_path` into `outpath`.
     auto pack(const std::filesystem::path& manifest_path, const std::filesystem::path& outdir, const std::filesystem::path& outpath) -> void;
 
+    // Options controlling hash-literal detection in pack_dir.
+    struct pack_dir_options
+    {
+        // When true, the leaf-most directory component (exactly 16 hex digits)
+        // is used directly as the dirhash, and a leaf name of exactly 64 hex
+        // digits is used directly as the filehash, instead of hashing the
+        // on-disk name.
+        bool hash_literal = false;
+        // Exception entries (raw, un-normalized) that must keep being hashed as
+        // ordinary names even when they match the hash-literal shape.  A bare
+        // token matches the leaf name or a single directory component; a token
+        // containing '/' matches the full relative path.  Normalization is
+        // applied inside pack_dir (lowercase, '/' separators, trimmed, no
+        // trailing '/').
+        std::vector<std::u16string> hash_keep{};
+    };
+
     // Packs `indir` directly into `outpath`, computing each file's dirhash/filehash
     // from its lowercased relative path and assigning sequential ids/keys.
-    auto pack_dir(const std::filesystem::path& indir, const params& p, const std::filesystem::path& outpath) -> void;
+    auto pack_dir(const std::filesystem::path& indir, const params& p, const std::filesystem::path& outpath, const pack_dir_options& opts = {}) -> void;
 
     // Persist / reload the unpack manifest.
     auto save_manifest(const manifest& m, const std::filesystem::path& path) -> void;

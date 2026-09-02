@@ -1259,6 +1259,99 @@ namespace krkr::xp3
             }
             return { to_lower_u16(rel.substr(0, slash + 1)), to_lower_u16(rel.substr(slash + 1)) };
         }
+
+        // True when `s` holds exactly `n` ASCII hex digits (0-9 a-f A-F).
+        auto is_hex_digits(std::u16string_view s, std::size_t n) -> bool
+        {
+            if (s.size() != n)
+            {
+                return false;
+            }
+            for (const auto c : s)
+            {
+                const bool digit = (c >= u'0' && c <= u'9');
+                const bool lower = (c >= u'a' && c <= u'f');
+                const bool upper = (c >= u'A' && c <= u'F');
+                if (!digit && !lower && !upper)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Decodes `out.size() * 2` hex digits into `out` bytes (big-endian hex
+        // -> raw bytes, matching the engine's on-disk hash naming).  The length
+        // is expected to have been validated already; returns false only on a
+        // non-hex digit, which should not happen after is_hex_digits.
+        auto decode_hex_u16(std::u16string_view s, std::span<std::uint8_t> out) -> bool
+        {
+            auto value = [](char16_t c) -> int
+            {
+                if (c >= u'0' && c <= u'9')
+                {
+                    return c - u'0';
+                }
+                if (c >= u'a' && c <= u'f')
+                {
+                    return c - u'a' + 10;
+                }
+                if (c >= u'A' && c <= u'F')
+                {
+                    return c - u'A' + 10;
+                }
+                return -1;
+            };
+            for (std::size_t i = 0; i < out.size(); ++i)
+            {
+                const int hi = value(s[static_cast<std::size_t>(i * 2)]);
+                const int lo = value(s[static_cast<std::size_t>(i * 2 + 1)]);
+                if (hi < 0 || lo < 0)
+                {
+                    return false;
+                }
+                out[i] = static_cast<std::uint8_t>((hi << 4) | lo);
+            }
+            return true;
+        }
+
+        // Normalizes an exception-list token: ASCII-lowercased, '\' -> '/',
+        // surrounding ASCII whitespace trimmed, and trailing '/' stripped.
+        // Bare tokens (no '/') match a leaf name or a single directory
+        // component; tokens containing '/' match the full relative path.
+        auto normalize_exception_token(std::u16string_view token) -> std::u16string
+        {
+            std::size_t l = 0;
+            std::size_t r = token.size();
+            while (l < r && (token[l] == u' ' || token[l] == u'\t' || token[l] == u'\r' || token[l] == u'\n'))
+            {
+                ++l;
+            }
+            while (r > l && (token[r - 1] == u' ' || token[r - 1] == u'\t' || token[r - 1] == u'\r' || token[r - 1] == u'\n'))
+            {
+                --r;
+            }
+            std::u16string out;
+            out.reserve(r - l);
+            for (std::size_t i = l; i < r; ++i)
+            {
+                char16_t c = token[i];
+                if (c == u'\\')
+                {
+                    c = u'/';
+                }
+                else if (c >= u'A' && c <= u'Z')
+                {
+                    c = static_cast<char16_t>(c + 0x20);
+                }
+                out.push_back(c);
+            }
+            while (!out.empty() && out.back() == u'/')
+            {
+                out.pop_back();
+            }
+            return out;
+        }
     } // namespace
 
     auto pack(const std::filesystem::path& manifest_path, const std::filesystem::path& outdir, const std::filesystem::path& outpath) -> void
@@ -1268,10 +1361,24 @@ namespace krkr::xp3
         write_file(outpath, content);
     }
 
-    auto pack_dir(const std::filesystem::path& indir, const params& p, const std::filesystem::path& outpath) -> void
+    auto pack_dir(const std::filesystem::path& indir, const params& p, const std::filesystem::path& outpath, const pack_dir_options& opts) -> void
     {
+        // Normalize the exception list once: ASCII-lowercased, '\' -> '/',
+        // whitespace trimmed, trailing '/' stripped.
+        std::vector<std::u16string> keep;
+        keep.reserve(opts.hash_keep.size());
+        for (const auto& token : opts.hash_keep)
+        {
+            const auto normalized = normalize_exception_token(token);
+            if (!normalized.empty())
+            {
+                keep.push_back(normalized);
+            }
+        }
+
         std::vector<file_entry> files;
         std::uint64_t           id = 0;
+        std::uint64_t           literal_count = 0;
         for (const auto& de : std::filesystem::recursive_directory_iterator{ indir })
         {
             if (!de.is_regular_file())
@@ -1300,6 +1407,65 @@ namespace krkr::xp3
 
             const auto [dir, name] = convert_paths_u16(rel_hash);
 
+            // ---- hash-literal detection -------------------------------------
+            // When enabled, the leaf-most directory component (16 hex digits)
+            // is used as the literal dirhash, and a leaf name of exactly 64 hex
+            // digits is used as the literal filehash.  The exception list
+            // (opts.hash_keep) downgrades any candidate back to ordinary name
+            // hashing.  Plain ('.'-prefixed) entries are never candidates: their
+            // on-disk leaf carries a leading dot.
+            std::u16string dir_component{};
+            if (opts.hash_literal && !is_plain && !dir.empty())
+            {
+                const auto d     = dir.substr(0, dir.size() - 1); // drop trailing '/'
+                const auto slash = d.find_last_of(u'/');
+                dir_component    = (slash == std::u16string::npos) ? d : d.substr(slash + 1);
+            }
+            const bool dir_candidate = opts.hash_literal && !is_plain &&
+                                       is_hex_digits(dir_component, 16);
+            const bool leaf_candidate = opts.hash_literal && !is_plain &&
+                                        name.size() == 64 && is_hex_digits(name, 64);
+
+            bool dir_literal  = dir_candidate;
+            bool leaf_literal = leaf_candidate;
+            if (dir_candidate || leaf_candidate)
+            {
+                const auto rel_norm = to_lower_u16(rel16);
+                for (const auto& e : keep)
+                {
+                    if (e.find(u'/') == std::u16string::npos)
+                    {
+                        // Bare entry: matches the leaf name or a single directory
+                        // component (16-hex vs 64-hex can never collide).
+                        if (dir_literal && e == dir_component)
+                        {
+                            dir_literal = false;
+                        }
+                        if (leaf_literal && e == name)
+                        {
+                            leaf_literal = false;
+                        }
+                    }
+                    else if (e == rel_norm)
+                    {
+                        // Full relative-path entry: downgrades both hashes.
+                        dir_literal  = false;
+                        leaf_literal = false;
+                    }
+                }
+            }
+
+            std::array<std::uint8_t, 8>  dirhash  = crypto::dirhash(dir);
+            std::array<std::uint8_t, 32> filehash = crypto::filehash(name);
+            if (dir_literal)
+            {
+                decode_hex_u16(dir_component, dirhash);
+            }
+            if (leaf_literal)
+            {
+                decode_hex_u16(name, filehash);
+            }
+
             if (is_plain)
             {
                 file_entry plain;
@@ -1326,14 +1492,27 @@ namespace krkr::xp3
             f.info_flags = kFileProtected;
             f.seg_flags  = kSegmEncodeRaw;
 
-            f.dirhash  = crypto::dirhash(dir);
-            f.filehash = crypto::filehash(name);
+            f.dirhash  = dirhash;
+            f.filehash = filehash;
 
             const auto data = read_file(de.path());
             f.adlr          = adler32_update(1, data);
 
             files.push_back(std::move(f));
             ++id;
+
+            if (dir_literal || leaf_literal)
+            {
+                ++literal_count;
+                std::cout << "[packdir] hash-literal " << (dir_literal ? "dir" : "   ") << " "
+                          << (leaf_literal ? "file" : "    ") << " " << utf16_to_utf8(rel16)
+                          << " -> dirhash=" << krkr::to_hex(dirhash) << " filehash=" << krkr::to_hex(filehash) << "\n";
+            }
+        }
+
+        if (literal_count > 0)
+        {
+            std::cout << "[packdir] hash-literal total=" << literal_count << "\n";
         }
 
         const auto content = build_archive(p, files, indir);

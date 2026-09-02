@@ -29,7 +29,18 @@ namespace krkrhxv4
         "                          -o <outdir> [--namestyle name|hash]\n"
         "  krkrhxv4 pack <manifest> -o <outdir> --out out.xp3\n"
         "  krkrhxv4 packdir <indir> --parampath key.ini --blockpath control_block.bin \\\n"
-        "                          --out out.xp3\n"
+        "                          --out out.xp3 [--hash-literal] \\\n"
+        "                          [--hash-keep NAME] [--hash-keep-list list.txt]\n"
+        "\n"
+        "packdir hash-literal options:\n"
+        "  --hash-literal       treat a 16-hex-digit dir name as a literal dirhash\n"
+        "                       and a 64-hex-digit file name as a literal filehash\n"
+        "  --hash-keep NAME     hash NAME normally even though it looks like a hash\n"
+        "                       (repeatable; bare name = leaf or single dir, path =\n"
+        "                       full relative path)\n"
+        "  --hash-keep-list F   read --hash-keep tokens from a UTF-8 list file F\n"
+        "                       (one per line, '#'/';' comments and blank lines\n"
+        "                       ignored)\n"
         "\n"
         "key.ini format (key=value lines, #/; comments ignored):\n"
         "  key       = <32 bytes hex>   ChaCha20 index key (frida derived_key)\n"
@@ -321,6 +332,60 @@ namespace krkrhxv4
         }
     }
 
+    // Converts a wide argv token (UTF-16 on Windows) to a u16string for the
+    // hash-keep exception list.
+    static auto warg_to_u16(std::wstring_view s) -> std::u16string
+    {
+        std::u16string out;
+        out.reserve(s.size());
+        for (const wchar_t c : s)
+        {
+            out.push_back(static_cast<char16_t>(c));
+        }
+        return out;
+    }
+
+    // Reads a UTF-8 list file (one hash-keep token per line; '#'/';' comments
+    // and blank lines ignored) and appends the tokens as raw u16 entries.
+    static auto load_hash_keep_list(std::vector<std::u16string>& keep, const std::filesystem::path& path) -> void
+    {
+        const auto bytes = krkr::xp3::read_file(path);
+        std::string_view text{ reinterpret_cast<const char*>(bytes.data()), bytes.size() };
+
+        // Optional UTF-8 BOM (EF BB BF), mirroring the INI reader.
+        if (text.size() >= 3 && static_cast<unsigned char>(text[0]) == 0xEF &&
+            static_cast<unsigned char>(text[1]) == 0xBB && static_cast<unsigned char>(text[2]) == 0xBF)
+        {
+            text.remove_prefix(3);
+        }
+
+        std::size_t pos = 0;
+        while (pos < text.size())
+        {
+            std::size_t end = pos;
+            while (end < text.size() && text[end] != '\r' && text[end] != '\n')
+            {
+                ++end;
+            }
+            const std::string_view line = trim_ascii_ws(text.substr(pos, end - pos));
+            if (end < text.size() && text[end] == '\r')
+            {
+                ++end;
+            }
+            if (end < text.size() && text[end] == '\n')
+            {
+                ++end;
+            }
+            pos = end;
+
+            if (line.empty() || line.front() == '#' || line.front() == ';')
+            {
+                continue;
+            }
+            keep.push_back(krkr::xp3::utf8_to_utf16(line));
+        }
+    }
+
     auto run_unpack(const int argc, const wchar_t* const argv[]) -> int
     {
         if (argc < 3)
@@ -448,6 +513,8 @@ namespace krkrhxv4
         std::filesystem::path parampath{};
         std::filesystem::path blockpath{};
         std::filesystem::path outpath{};
+        krkr::xp3::pack_dir_options pack_opts{};
+        std::vector<std::u16string> hash_keep_raw{};
 
         for (int i = 2; i < argc; ++i)
         {
@@ -468,6 +535,18 @@ namespace krkrhxv4
             else if (arg == L"--out")
             {
                 outpath = std::filesystem::path{ value() };
+            }
+            else if (arg == L"--hash-literal")
+            {
+                pack_opts.hash_literal = true;
+            }
+            else if (arg == L"--hash-keep")
+            {
+                hash_keep_raw.push_back(warg_to_u16(value()));
+            }
+            else if (arg == L"--hash-keep-list")
+            {
+                load_hash_keep_list(hash_keep_raw, std::filesystem::path{ value() });
             }
         }
 
@@ -490,10 +569,16 @@ namespace krkrhxv4
             krkr::detail::fail("control block required");
         }
 
+        pack_opts.hash_keep = std::move(hash_keep_raw);
+
         const auto packdir_start_line{ std::string{ "[packdir] " } + indir.generic_string() };
         console::helper.writeline(packdir_start_line);
+        if (pack_opts.hash_literal)
+        {
+            console::helper.writeline(std::string{ "[packdir] hash-literal detection enabled (" } + std::to_string(pack_opts.hash_keep.size()) + " exception token(s))");
+        }
 
-        krkr::xp3::pack_dir(indir, params, outpath);
+        krkr::xp3::pack_dir(indir, params, outpath, pack_opts);
         
         const auto packdir_done_line{ std::string{ "[packdir] done -> " } + outpath.generic_string() };
         console::helper.writeline(packdir_done_line);
