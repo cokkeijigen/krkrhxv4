@@ -12,6 +12,7 @@
 #include <console.hpp>
 #include <cx/cx.hpp>
 #include <crypto/crypto.hpp>
+#include <exe/exe.hpp>
 #include <xp3/xp3.hpp>
 
 // Global singleton backing console.hpp's `extern helper_t helper;`.
@@ -31,6 +32,11 @@ namespace krkrhxv4
         "  krkrhxv4 packdir <indir> --parampath key.ini --blockpath control_block.bin \\\n"
         "                          --out out.xp3 [--hash-literal] \\\n"
         "                          [--hash-keep NAME] [--hash-keep-list list.txt]\n"
+        "  krkrhxv4 dumpexe <game.exe> -o <outdir>\n"
+        "\n"
+        "dumpexe: Extract embedded resources from a game EXE.\n"
+        "  Output files: STARTUP.TJS, BOOTSTRAP, salt.bin, filter_paths.txt\n"
+        "  These can be used to derive key.ini parameters.\n"
         "\n"
         "packdir hash-literal options:\n"
         "  --hash-literal       treat a 16-hex-digit dir name as a literal dirhash\n"
@@ -585,6 +591,56 @@ namespace krkrhxv4
         return 0;
     }
 
+    auto run_dumpexe(const int argc, const wchar_t* const argv[]) -> int
+    {
+        if (argc < 2)
+        {
+            console::helper.writeline(k_usage);
+            return 1;
+        }
+        const std::filesystem::path exe_path{ argv[1] };
+
+        std::filesystem::path outdir{ L"out" };
+        for (int i = 2; i < argc; ++i)
+        {
+            const std::wstring_view arg{ argv[i] };
+            if (arg == L"-o" && i + 1 < argc)
+            {
+                outdir = std::filesystem::path{ argv[++i] };
+            }
+        }
+
+        // Check if input is a PE file
+        if (!krkr::exe::is_pe_file(exe_path))
+        {
+            console::helper.writeline("error: input is not a valid PE executable");
+            return 1;
+        }
+
+        const auto dump_line{ std::string{ "[dumpexe] " } + exe_path.generic_string() };
+        console::helper.writeline(dump_line);
+
+        // Attempt to dump resources
+        const auto result = krkr::exe::dump_exe_resources(exe_path);
+        if (!result)
+        {
+            console::helper.writeline("error: failed to extract HxV4 resources from EXE");
+            console::helper.writeline("  This may not be a KiriKiri HxV4 game, or the EXE uses a different format.");
+            return 1;
+        }
+
+        // Write output files
+        krkr::exe::write_dump_result(*result, outdir);
+
+        const auto done_line{ std::string{ "[dumpexe] wrote " } + std::to_string(4) + " files to " + outdir.generic_string() };
+        console::helper.writeline(done_line);
+        console::helper.writeline("  - STARTUP.TJS (TJS2100 bytecode)");
+        console::helper.writeline("  - BOOTSTRAP (decrypted DLL)");
+        console::helper.writeline("  - salt.bin (8192 bytes)");
+        console::helper.writeline("  - filter_paths.txt");
+        return 0;
+    }
+
     static auto main(const int argc, const wchar_t* const argv[]) -> int
     {
         if (argc < 2)
@@ -605,6 +661,21 @@ namespace krkrhxv4
         if (command == L"packdir")
         {
             return run_packdir(argc - 1, argv + 1);
+        }
+        if (command == L"dumpexe")
+        {
+            return run_dumpexe(argc - 1, argv + 1);
+        }
+
+        // Auto-detect: if input is a PE file, try dumpexe
+        if (argc >= 2)
+        {
+            const std::filesystem::path input{ argv[1] };
+            if (krkr::exe::is_pe_file(input))
+            {
+                console::helper.writeline("[auto] detected PE executable, running dumpexe...");
+                return run_dumpexe(argc - 1, argv + 1);
+            }
         }
 
         console::helper.writeline(k_usage);

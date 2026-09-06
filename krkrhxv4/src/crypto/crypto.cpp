@@ -243,7 +243,7 @@ namespace krkr::crypto
             std::copy(h.begin(), h.end(), v.begin());
             std::copy(std::begin(iv), std::end(iv), v.begin() + 8);
             v[12] ^= static_cast<std::uint32_t>((offset + 64) & 0xffffffffu);
-            v[13] ^= static_cast<std::uint32_t>(((offset + 64) >> 32) & 0xffffffffu);
+            v[13] ^= static_cast<std::uint32_t>((static_cast<std::uint64_t>(offset) + 64) >> 32);
             for (const auto& s : sigma)
             {
                 g(v, 0, 4, 8, 12, m[static_cast<std::size_t>(s[0])], m[static_cast<std::size_t>(s[1])]);

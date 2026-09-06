@@ -27,7 +27,11 @@ namespace console
 
 	console_helper::console_helper() noexcept 
 	{
-		::AllocConsole();
+		// Only alloc a new console if we don't already have one
+		if (::GetConsoleWindow() == nullptr)
+		{
+			::AllocConsole();
+		}
 		this->m_Output = ::GetStdHandle(STD_OUTPUT_HANDLE);
 		this->m_Input  = ::GetStdHandle(STD_INPUT_HANDLE);
 		this->m_Window = ::GetConsoleWindow();
@@ -123,22 +127,42 @@ namespace console
 	}
 
 	auto console_helper::write(std::wstring_view content) const noexcept -> const console_helper&
-	{
-		if (this->m_Output != nullptr && !content.empty())
-		{
-			::WriteConsoleW(this->m_Output, content.data(), content.size(), NULL, NULL);
-		}
-		return { *this };
-	}
+			{
+				if (!content.empty())
+				{
+					DWORD mode = 0;
+					if (this->m_Output != nullptr && ::GetConsoleMode(this->m_Output, &mode))
+					{
+						// Console output
+						::WriteConsoleW(this->m_Output, content.data(), static_cast<DWORD>(content.size()), NULL, NULL);
+					}
+					else
+					{
+						// Redirected output - use std::wcout
+						std::wcout << content << std::flush;
+					}
+				}
+				return { *this };
+			}
 
-	auto console_helper::write(std::string_view content) const noexcept -> const console_helper&
-	{
-		if (this->m_Output != nullptr && !content.empty())
-		{
-			::WriteConsoleA(this->m_Output, content.data(), content.size(), NULL, NULL);
-		}
-		return { *this };
-	}
+			auto console_helper::write(std::string_view content) const noexcept -> const console_helper&
+			{
+				if (!content.empty())
+				{
+					DWORD mode = 0;
+					if (this->m_Output != nullptr && ::GetConsoleMode(this->m_Output, &mode))
+					{
+						// Console output
+						::WriteConsoleA(this->m_Output, content.data(), static_cast<DWORD>(content.size()), NULL, NULL);
+					}
+					else
+					{
+						// Redirected output - use std::cout
+						std::cout << content << std::flush;
+					}
+				}
+				return { *this };
+			}
 
 	auto console_helper::write(uint32_t cdpg, std::string_view content) const noexcept -> const console_helper&
 	{

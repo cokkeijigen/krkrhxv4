@@ -18,10 +18,15 @@ add_executable(${PROJECT_NAME}
     src/crypto/crypto.cpp
     src/xp3/xp3.cpp
     src/console/console.cpp
+    src/exe/exe.cpp
+    src/dumpkey/argon2.cpp
+    src/dumpkey/keccak.cpp
 )
 target_include_directories(${PROJECT_NAME} PUBLIC
     src
     src/console
+    src/exe
+    src/dumpkey
 )
 
 find_package(ZLIB REQUIRED)
